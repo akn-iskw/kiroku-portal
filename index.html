@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>議事録 — 面談・会議・委員会の記録</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#F5F6F2;
+    --surface:#FFFFFF;
+    --ink:#22302A;
+    --ink-soft:#5B665F;
+    --ink-faint:#8B958E;
+    --primary:#2F5D53;
+    --primary-deep:#1E3F38;
+    --primary-soft:#E4EDE9;
+    --accent:#B8763B;
+    --accent-soft:#F3E6D6;
+    --slate:#5C6670;
+    --slate-soft:#E7E9EA;
+    --danger:#AD4A3D;
+    --danger-soft:#F5E2DF;
+    --warn:#B4862B;
+    --warn-soft:#F4EAD3;
+    --border:#DFE3DD;
+    --border-strong:#C9D0C8;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans JP', sans-serif;
+    font-size:14px;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.serif{ font-family:'Shippori Mincho', serif; }
+  button{ font-family:inherit; cursor:pointer; }
+  input,select,textarea{ font-family:inherit; font-size:14px; color:var(--ink); }
+  a{ color:inherit; }
+
+  /* ---------- Login ---------- */
+  .login-wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); }
+  .login-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:38px 34px; width:100%; max-width:340px; }
+  .login-card .brand{ color:var(--ink); margin-bottom:2px; }
+  .login-sub{ color:var(--ink-faint); font-size:12.5px; margin:2px 0 24px; }
+  .login-card .field{ margin-bottom:14px; }
+  .login-card .field label{ display:block; font-size:11.5px; color:var(--ink-faint); margin-bottom:5px; }
+  .login-card .field input{ width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:9px 11px; }
+  .login-error{ color:var(--danger); font-size:12px; margin-top:12px; min-height:14px; }
+  .login-note{ color:var(--ink-faint); font-size:11px; margin-top:18px; line-height:1.6; }
+
+  #shell{ display:none; min-height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  #sidebar{
+    width:216px; flex:none;
+    background:var(--primary-deep);
+    color:#EFF3F0;
+    padding:28px 18px;
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh;
+  }
+  .brand{
+    font-family:'Shippori Mincho', serif;
+    font-weight:800;
+    font-size:21px;
+    letter-spacing:.02em;
+    color:#fff;
+    margin:0 4px 3px;
+  }
+  .brand-sub{
+    font-size:11px;
+    color:#9FB6AC;
+    margin:0 4px 30px;
+  }
+  .nav-item{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 12px; margin-bottom:2px;
+    border-radius:var(--radius);
+    color:#CFE0D8;
+    font-size:13.5px;
+    border:none; background:transparent;
+    width:100%; text-align:left;
+    transition:background .12s ease;
+  }
+  .nav-item:hover{ background:rgba(255,255,255,.06); color:#fff; }
+  .nav-item.active{ background:rgba(255,255,255,.12); color:#fff; font-weight:500; }
+  .nav-dot{ width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.55; flex:none; }
+  .sidebar-footer{
+    margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,.12);
+    font-size:11.5px; color:#8FA79C;
+  }
+  .user-name{ font-size:12.5px; font-weight:600; color:#fff; }
+  .user-role{ font-size:10.5px; color:#9FB6AC; margin-top:2px; }
+  .logout-btn{ margin-top:10px; padding:6px 10px; font-size:11px; color:#CFE0D8; border:1px solid rgba(255,255,255,.25); border-radius:var(--radius); background:transparent; }
+  .logout-btn:hover{ border-color:rgba(255,255,255,.5); color:#fff; }
+  .facility-pill{
+    display:inline-block; margin:2px 4px 0 0; padding:2px 8px;
+    border:1px solid rgba(255,255,255,.18); border-radius:20px; font-size:10.5px; color:#B9CEC4;
+  }
+
+  /* ---------- Main ---------- */
+  #main{ flex:1; min-width:0; padding:34px 42px 60px; max-width:1180px; }
+  .page-head{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    margin-bottom:26px; flex-wrap:wrap; gap:14px;
+  }
+  .page-head h1{ font-size:25px; margin:0 0 6px; font-weight:700; }
+  .page-head .lede{ color:#3D4A43; font-size:14px; margin:0; max-width:44em;}
+  .btn{
+    border-radius:var(--radius); border:1px solid var(--border-strong);
+    background:var(--surface); color:var(--ink); padding:9px 16px;
+    font-size:13px; font-weight:500; display:inline-flex; align-items:center; gap:6px;
+    transition:border-color .12s ease, background .12s ease;
+  }
+  .btn:hover{ border-color:var(--primary); }
+  .btn-primary{ background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn-primary:hover{ background:var(--primary-deep); }
+  .btn-ghost{ border-color:transparent; background:transparent; }
+  .btn-ghost:hover{ border-color:var(--border-strong); }
+  .btn-danger{ color:var(--danger); }
+
+  /* ---------- Dashboard: compliance tracker ---------- */
+  .month-band{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:22px 24px 24px; margin-bottom:22px;
+  }
+  .month-band-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;}
+  .month-band-head h2{ font-size:16px; margin:0; font-weight:700; }
+  .month-band-head .meta{ font-size:13px; color:#4B564F; }
+  .facility-tabs{ display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }
+  .facility-tab{
+    border:1px solid var(--border-strong); background:var(--surface); border-radius:20px;
+    padding:5px 14px; font-size:12.5px; color:var(--ink-soft);
+  }
+  .facility-tab.active{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-deep); font-weight:500; }
+  .committee-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:10px;
+  }
+  .committee-card{
+    border:1px solid var(--border); border-left:3px solid var(--border-strong);
+    border-radius:var(--radius); padding:12px 14px; background:var(--bg);
+  }
+  .committee-card.done{ border-left-color:var(--primary); }
+  .committee-card.pending{ border-left-color:var(--warn); }
+  .committee-card.overdue{ border-left-color:var(--danger); }
+  .committee-card .name{ font-size:13px; font-weight:500; margin-bottom:6px; }
+  .committee-card .status{ font-size:11.5px; display:flex; align-items:center; gap:6px; }
+  .status-dot{ width:6px;height:6px;border-radius:50%; }
+  .status-dot.done{ background:var(--primary); }
+  .status-dot.pending{ background:var(--warn); }
+  .status-dot.overdue{ background:var(--danger); }
+  .committee-card .status.done{ color:var(--primary-deep); }
+  .committee-card .status.pending{ color:var(--warn); }
+  .committee-card .status.overdue{ color:var(--danger); }
+  .committee-card .go-link{ display:block; margin-top:8px; font-size:12.5px; font-weight:600; color:var(--primary); text-decoration:underline; background:none; border:none; padding:0; }
+
+  .dash-cols{ display:grid; grid-template-columns:1.1fr 1fr; gap:20px; }
+  @media (max-width:880px){ .dash-cols{ grid-template-columns:1fr; } }
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; }
+  .panel h3{ font-size:14px; margin:0 0 14px; font-weight:700; }
+  .action-row{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .action-row:last-child{ border-bottom:none; }
+  .action-row .who{ color:var(--ink); font-weight:500; }
+  .action-row .what{ color:var(--ink-soft); }
+  .due-tag{ font-size:11px; padding:2px 8px; border-radius:20px; flex:none; margin-left:10px; }
+  .due-tag.overdue{ background:var(--danger-soft); color:var(--danger); }
+  .due-tag.soon{ background:var(--warn-soft); color:var(--warn); }
+  .due-tag.ok{ background:var(--slate-soft); color:var(--slate); }
+  .empty-note{ color:var(--ink-faint); font-size:12.5px; padding:6px 0; }
+  .settings-row{ display:flex; gap:8px; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); }
+  .settings-row:last-child{ border-bottom:none; }
+  .settings-row input{ flex:1; border:1px solid var(--border-strong); border-radius:var(--radius); padding:7px 10px; }
+  #newCommitteeName{ flex:1; border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; }
+
+  /* ---------- List ---------- */
+  .toolbar{ display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  .type-tabs{ display:flex; gap:4px; background:var(--slate-soft); padding:3px; border-radius:20px; flex-wrap:wrap; }
+  .type-tab{ border:none; background:transparent; padding:6px 14px; font-size:12.5px; border-radius:18px; color:var(--ink-soft); }
+  .type-tab.active{ background:var(--surface); color:var(--ink); font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .search-input{
+    flex:1; min-width:180px; border:1px solid var(--border-strong); border-radius:20px;
+    padding:8px 14px; background:var(--surface);
+  }
+  table.records{ width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+  table.records th{ text-align:left; font-size:11.5px; color:var(--ink-faint); font-weight:500; padding:10px 14px; border-bottom:1px solid var(--border); }
+  table.records td{ padding:11px 14px; border-bottom:1px solid var(--border); font-size:12.8px; vertical-align:top; }
+  table.records tr:last-child td{ border-bottom:none; }
+  table.records tr.rowlink{ cursor:pointer; }
+  table.records tr.rowlink:hover{ background:var(--bg); }
+  .type-badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 9px 3px 7px; border-radius:20px; white-space:nowrap; }
+  .type-badge .dot{ width:6px; height:6px; border-radius:50%; }
+  .type-badge.staff{ background:var(--primary-soft); color:var(--primary-deep); }
+  .type-badge.staff .dot{ background:var(--primary); }
+  .type-badge.committee{ background:var(--accent-soft); color:#7A501F; }
+  .type-badge.committee .dot{ background:var(--accent); }
+  .type-badge.meeting{ background:var(--slate-soft); color:var(--slate); }
+  .type-badge.meeting .dot{ background:var(--slate); }
+  .type-badge.deal{ background:#EFE6F1; color:#6B3F72; }
+  .type-badge.deal .dot{ background:#8A4E92; }
+  .cell-title{ font-weight:500; }
+  .cell-sub{ color:var(--ink-faint); font-size:11.5px; }
+  .cell-preview{ color:var(--ink-soft); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ---------- Edit / view form ---------- */
+  .form-wrap{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+  .form-tabs{ display:flex; border-bottom:1px solid var(--border); }
+  .form-tab{ flex:1; text-align:center; padding:13px 0; font-size:13px; border:none; background:transparent; color:var(--ink-faint); border-bottom:2px solid transparent; }
+  .form-tab.active{ color:var(--ink); font-weight:600; border-bottom-color:var(--primary); }
+  .form-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; padding:22px 24px; border-bottom:1px solid var(--border); }
+  @media (max-width:900px){ .form-grid{ grid-template-columns:repeat(2,1fr); } }
+  .field label{ display:block; font-size:11.5px; color:var(--ink-faint); margin-bottom:5px; }
+  .field label .req{ color:var(--danger); margin-left:2px; }
+  .field label .opt{ color:var(--ink-faint); font-weight:400; }
+  .field input, .field select{
+    width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--surface);
+  }
+  .sections{ padding:22px 24px; }
+  .section-block{ border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; background:var(--bg); }
+  .section-block .heading-row{ display:flex; gap:10px; margin-bottom:8px; }
+  .section-block input.heading{ font-weight:700; border:none; background:transparent; padding:2px 0; border-bottom:1px solid transparent; flex:1; font-size:14px; }
+  .section-block input.heading:focus{ outline:none; border-bottom-color:var(--border-strong); }
+  .section-block textarea{ width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; resize:vertical; min-height:70px; background:var(--surface); }
+  .section-remove{ border:none; background:none; color:var(--ink-faint); font-size:12px; }
+  .section-remove:hover{ color:var(--danger); }
+  .add-section{ border:1px dashed var(--border-strong); border-radius:var(--radius); background:transparent; color:var(--ink-soft); padding:9px; width:100%; font-size:12.5px; }
+  .add-section:hover{ border-color:var(--primary); color:var(--primary); }
+  .confirm-block{ padding:0 24px 22px; }
+  .confirm-block h3{ font-size:13.5px; margin:0 0 4px; font-weight:700; }
+  .confirm-block .hint{ font-size:11.5px; color:var(--ink-faint); margin:0 0 12px; }
+  .confirm-controls{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .confirm-controls select, .confirm-controls input[type=text]{
+    border:1px solid var(--border-strong); border-radius:var(--radius); padding:7px 10px; background:var(--surface);
+  }
+  .confirm-controls select{ min-width:150px; }
+  .confirm-controls input[type=text]{ flex:1; min-width:140px; }
+  .confirm-add-btn{ border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); padding:7px 12px; font-size:12.5px; color:var(--ink-soft); }
+  .confirm-add-btn:hover{ border-color:var(--primary); color:var(--primary); }
+  .confirm-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .confirm-chip{
+    display:inline-flex; align-items:center; gap:8px; background:var(--primary-soft); color:var(--primary-deep);
+    border-radius:20px; padding:5px 8px 5px 12px; font-size:12.5px;
+  }
+  .confirm-chip button{ border:none; background:none; color:var(--primary-deep); opacity:.6; font-size:12px; line-height:1; padding:0 2px; }
+  .confirm-chip button:hover{ opacity:1; }
+  .confirm-empty{ color:var(--ink-faint); font-size:12px; }
+  .import-panel{ margin:0 24px 20px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); padding:16px 18px; }
+  .import-panel summary{ cursor:pointer; font-size:13px; font-weight:600; color:var(--ink); list-style:none; display:flex; align-items:center; gap:6px; }
+  .import-panel summary::-webkit-details-marker{ display:none; }
+  .import-panel summary::before{ content:'▸'; font-size:11px; color:var(--ink-faint); transition:transform .12s ease; }
+  .import-panel[open] summary::before{ transform:rotate(90deg); }
+  .import-panel .hint{ font-size:11.5px; color:var(--ink-faint); margin:8px 0 12px; }
+  .import-body{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+  @media (max-width:760px){ .import-body{ grid-template-columns:1fr; } }
+  .import-col label{ display:block; font-size:11.5px; color:var(--ink-faint); margin-bottom:6px; }
+  .import-col input[type=file]{ font-size:12.5px; width:100%; }
+  .import-col textarea{ width:100%; min-height:90px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--surface); }
+  .import-col .confirm-add-btn{ margin-top:8px; }
+  .form-footer{ display:flex; justify-content:space-between; align-items:center; gap:14px; padding:16px 24px; flex-wrap:wrap; }
+  .form-footer .next-fields{ display:flex; gap:10px; flex:1; min-width:280px; align-items:center; }
+  .form-footer .next-fields input{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; }
+  .form-footer .next-fields input[type=text]{ flex:1; }
+
+  /* ---------- Detail (read only) ---------- */
+  .detail-body{ padding:22px 24px; }
+  .detail-section{ margin-bottom:20px; }
+  .detail-section h4{ margin:0 0 8px; font-size:14px; font-weight:700; }
+  .detail-section ul{ margin:0; padding-left:18px; }
+  .detail-section li{ margin-bottom:4px; color:var(--ink); }
+
+  .toast{
+    position:fixed; bottom:24px; right:24px; background:var(--primary-deep); color:#fff;
+    padding:11px 18px; border-radius:var(--radius); font-size:12.5px; opacity:0; transform:translateY(6px);
+    transition:opacity .2s ease, transform .2s ease; pointer-events:none; z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+
+  @media (max-width:760px){
+    #shell{ flex-direction:column; }
+    #sidebar{ width:100%; height:auto; position:relative; flex-direction:row; align-items:center; padding:14px 16px; overflow-x:auto; }
+    .brand, .brand-sub, .sidebar-footer{ display:none; }
+    .nav-item{ width:auto; white-space:nowrap; }
+    #main{ padding:22px 18px 50px; }
+    .form-grid{ grid-template-columns:1fr; }
+  }
+
+  @media print{
+    body{ background:#fff; }
+    #sidebar, .toast, .no-print{ display:none !important; }
+    #main{ padding:0; max-width:100%; }
+    .form-wrap{ border:none; }
+    .detail-body{ padding:0; }
+    .page-head{ margin-bottom:18px; }
+    .type-badge{ border:1px solid currentColor; background:transparent !important; }
+    .confirm-chip{ border:1px solid var(--border-strong) !important; background:transparent !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <p class="brand serif">議事録</p>
+    <p class="login-sub">ログインしてください</p>
+    <div class="field"><label>メールアドレス</label><input type="email" id="loginEmail" autocomplete="username"></div>
+    <div class="field"><label>パスワード</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%; justify-content:center; margin-top:6px;">ログイン</button>
+    <p class="login-error" id="loginError"></p>
+    <p class="login-note">アカウントは招待制です。ログインできない場合は管理者にお問い合わせください。</p>
+  </div>
+</div>
+
+<div id="shell">
+  <div id="sidebar">
+    <p class="brand">議事録</p>
+    <p class="brand-sub">Gijiroku Portal for Care</p>
+    <button class="nav-item" data-nav="dashboard"><span class="nav-dot"></span>ダッシュボード</button>
+    <button class="nav-item" data-nav="list"><span class="nav-dot"></span>記録一覧</button>
+    <div id="newRecordNavSlot"></div>
+    <div class="sidebar-footer">
+      <div id="userBadge"></div>
+      <div style="margin-top:14px;">
+        対応施設
+        <div>
+          <span class="facility-pill">デンタル中村</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="main"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  if(typeof pdfjsLib !== 'undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // ---------- Supabase 接続情報 ----------
+  const SUPABASE_URL = 'https://splmrpfagtyrfloltwtl.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_7S56o9cnVJ1Il5m_qmXhVQ_5_AN3Hmb';
+  const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const ROSTER_FACILITY = 'ナーシングホーム寿々デンタル中村'; // 社員名簿側での正式表記
+
+  const FACILITIES = ['デンタル中村']; // 正式名称: ナーシングホーム寿々デンタル中村
+  let COMMITTEES = []; // Supabase の committees テーブルから読み込む
+  const TYPE_META = {
+    staff:{ label:'スタッフ面談' },
+    committee:{ label:'委員会' },
+    meeting:{ label:'会議' },
+    deal:{ label:'商談' }
+  };
+  const ALL_TYPES = ['staff','committee','meeting','deal'];
+
+  let records = [];
+  let ROSTER_NAMES = [];
+  let myPermissions = null;
+  let currentUser = null;
+  let state = { view:'dashboard', filterType:'all', search:'', dashFacility:FACILITIES[0], editingId:null, draft:null };
+
+  const app = document.getElementById('main');
+  const toastEl = document.getElementById('toast');
+
+  function uid(){ return 'r' + Math.random().toString(36).slice(2,10); }
+  function todayISO(){ const d=new Date(); return d.toISOString().slice(0,10); }
+  function fmt(dateStr){
+    if(!dateStr) return '—';
+    const d = new Date(dateStr+'T00:00:00');
+    if(isNaN(d)) return dateStr;
+    const w = ['日','月','火','水','木','金','土'][d.getDay()];
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}(${w})`;
+  }
+  function monthKey(dateStr){ return dateStr ? dateStr.slice(0,7) : ''; }
+  function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function displayTitle(r){ return (r.type==='staff' ? '面談相手：' : '') + (r.title||''); }
+  function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>toastEl.classList.remove('show'),2200); }
+
+  // ---------- 権限ヘルパー ----------
+  function canView(type){ return !!myPermissions && (myPermissions.is_admin || myPermissions[type+'_access'] !== 'none'); }
+  function canEdit(type){ return !!myPermissions && (myPermissions.is_admin || myPermissions[type+'_access'] === 'edit'); }
+  function canEditAny(){ return ALL_TYPES.some(canEdit); }
+  function viewableTypes(){ return ALL_TYPES.filter(canView); }
+  function editableTypes(){ return ALL_TYPES.filter(canEdit); }
+
+  // ---------- DB <-> アプリ内部形式の変換 ----------
+  function fromDbRow(row){
+    return {
+      id: row.id, type: row.type, committeeId: row.committee_id || '', date: row.date, title: row.title,
+      facility: row.facility, role: row.role, location: row.location, recorder: row.recorder,
+      sections: row.sections || [], nextAction: row.next_action || '', dueDate: row.due_date || '',
+      confirmations: row.confirmations || [], createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
+    };
+  }
+  function toDbRow(r){
+    return {
+      type: r.type,
+      committee_id: r.type==='committee' ? (r.committeeId || null) : null,
+      date: r.date,
+      title: r.title,
+      facility: r.facility || null,
+      role: r.role || null,
+      location: r.location || null,
+      recorder: r.recorder || null,
+      sections: r.sections || [],
+      next_action: r.nextAction || null,
+      due_date: r.dueDate || null,
+      confirmations: r.confirmations || [],
+      created_by: currentUser ? currentUser.id : null
+    };
+  }
+
+  // ---------- 認証まわり ----------
+  function showLogin(msg){
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('shell').style.display = 'none';
+    document.getElementById('loginError').textContent = msg || '';
+  }
+
+  async function onLogin(session){
+    currentUser = session.user;
+    const { data: perm, error } = await sbClient.from('permissions').select('*').eq('user_id', currentUser.id).maybeSingle();
+    if(error || !perm){
+      showLogin('この議事録アプリの権限が設定されていません。管理者にお問い合わせください。');
+      return;
+    }
+    myPermissions = perm;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('shell').style.display = 'flex';
+    renderSidebarExtras();
+    await Promise.all([loadRecords(), loadRoster(), loadCommittees()]);
+  }
+
+  function renderSidebarExtras(){
+    const slot = document.getElementById('newRecordNavSlot');
+    slot.innerHTML = canEditAny() ? `<button class="nav-item" data-nav="new"><span class="nav-dot"></span>新規記録を作成</button>` : '';
+    const badge = document.getElementById('userBadge');
+    badge.innerHTML = `
+      <div class="user-name">${escapeHTML(myPermissions.display_name || currentUser.email)}</div>
+      <div class="user-role">${myPermissions.is_admin ? '管理者（全権限）' : '閲覧・入力権限あり'}</div>
+      <button class="logout-btn" id="logoutBtn">ログアウト</button>
+    `;
+    document.getElementById('logoutBtn').addEventListener('click', ()=> sbClient.auth.signOut());
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('loginPassword').addEventListener('keyup', (e)=>{ if(e.key==='Enter') doLogin(); });
+  async function doLogin(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    document.getElementById('loginError').textContent = '確認しています…';
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    if(error){ document.getElementById('loginError').textContent = 'ログインできませんでした（詳細: ' + error.message + '）'; return; }
+    await onLogin(data.session);
+  }
+
+  sbClient.auth.onAuthStateChange((event)=>{
+    if(event === 'SIGNED_OUT'){
+      myPermissions = null; currentUser = null; records = []; ROSTER_NAMES = [];
+      state = { view:'dashboard', filterType:'all', search:'', dashFacility:FACILITIES[0], editingId:null, draft:null };
+      showLogin();
+    }
+  });
+
+  async function initApp(){
+    const { data:{ session } } = await sbClient.auth.getSession();
+    if(session){ await onLogin(session); } else { showLogin(); }
+  }
+
+  // ---------- 記録の読み込み ----------
+  async function loadRecords(){
+    const { data, error } = await sbClient.from('records').select('*').order('date', { ascending:false });
+    if(error){ toast('記録の読み込みに失敗しました'); records = []; }
+    else { records = data.map(fromDbRow); }
+    render();
+  }
+
+  async function loadRoster(){
+    ROSTER_NAMES = [];
+    if(!(myPermissions.roster_access === 'view' || myPermissions.is_admin)) return;
+    try{
+      const { data, error } = await sbClient.from('employees').select('name').eq('facility', ROSTER_FACILITY).is('resignation_date', null).order('name');
+      if(!error && data) ROSTER_NAMES = data.map(r=>r.name).filter(Boolean);
+    }catch(e){ ROSTER_NAMES = []; }
+  }
+
+  async function loadCommittees(){
+    if(!canView('committee')){ COMMITTEES = []; return; }
+    const { data, error } = await sbClient.from('committees').select('*').order('sort_order').order('name');
+    if(error){ toast('委員会一覧の読み込みに失敗しました: ' + error.message); return; }
+    if(data) COMMITTEES = data.map(c=>({ id:c.id, name:c.name, sortOrder:c.sort_order }));
+  }
+
+  // ---------- routing ----------
+  document.getElementById('shell').addEventListener('click', (e)=>{
+    const navBtn = e.target.closest('[data-nav]');
+    if(navBtn){
+      const nav = navBtn.dataset.nav;
+      if(nav === 'new'){ if(canEditAny()) openEditor(null); }
+      else { state.view = nav; render(); }
+    }
+  });
+
+  function setActiveNav(view){
+    document.querySelectorAll('.nav-item').forEach(b=>{
+      b.classList.toggle('active', b.dataset.nav === view || (view==='new' && b.dataset.nav==='new'));
+    });
+  }
+
+  function setDocTitle(text){
+    document.title = text ? `${text} - 議事録` : '議事録 — 面談・会議・委員会の記録';
+  }
+
+  function render(){
+    if(state.view === 'dashboard'){ setDocTitle(''); return renderDashboard(); }
+    if(state.view === 'list'){ setDocTitle('記録一覧'); return renderList(); }
+    if(state.view === 'edit'){ setDocTitle(state.draft && state.draft.title ? state.draft.title : '新規記録の作成'); return renderEditor(); }
+    if(state.view === 'committees'){ setDocTitle('委員会の設定'); return renderCommitteeSettings(); }
+    if(state.view === 'detail'){
+      const r = records.find(x=>x.id===state.editingId);
+      setDocTitle(r ? displayTitle(r) : '');
+      return renderDetail();
+    }
+  }
+
+  // ---------- Dashboard ----------
+  function renderDashboard(){
+    setActiveNav('dashboard');
+    const mKey = todayISO().slice(0,7);
+    const monthLabel = todayISO().slice(0,7).replace('-','年') + '月';
+    const daysInMonth = new Date(Number(mKey.slice(0,4)), Number(mKey.slice(5,7)), 0).getDate();
+    const dayOfMonth = new Date().getDate();
+    const daysLeft = daysInMonth - dayOfMonth;
+    const showCommitteeBand = canView('committee');
+
+    let monthBand = '';
+    if(showCommitteeBand){
+      const committeeCards = COMMITTEES.map(c=>{
+        const rec = records.find(r=>r.type==='committee' && r.committeeId===c.id && monthKey(r.date)===mKey && r.facility===state.dashFacility);
+        let status='pending', label=`残り${daysLeft}日`;
+        if(rec){ status='done'; label='実施済み — '+fmt(rec.date); }
+        else if(daysLeft <= 3){ status='overdue'; label = daysLeft<0 ? '未実施（期限超過）' : `未実施 — 残り${daysLeft}日`; }
+        return `<div class="committee-card ${status}">
+          <div class="name">${escapeHTML(c.name)}</div>
+          <div class="status ${status}"><span class="status-dot ${status}"></span>${label}</div>
+          ${rec ? `<button class="go-link" data-view-id="${rec.id}">記録を見る</button>` : (canEdit('committee') ? `<button class="go-link" data-new-committee="${c.id}">今月の記録を作成</button>` : '')}
+        </div>`;
+      }).join('');
+      monthBand = `
+      <div class="month-band">
+        <div class="month-band-head">
+          <div>
+            <h2>${monthLabel}の委員会開催状況</h2>
+            <span class="meta">介護施設の運営基準で定められた定例委員会の実施記録です</span>
+          </div>
+          ${myPermissions.is_admin ? `<button class="btn btn-ghost" data-nav="committees" style="font-size:13px; padding:6px 12px; border:1px solid var(--border-strong); font-weight:500;">委員会を編集</button>` : ''}
+        </div>
+        <div class="facility-tabs">
+          ${FACILITIES.map(f=>`<button class="facility-tab ${f===state.dashFacility?'active':''}" data-dash-facility="${escapeHTML(f)}">${escapeHTML(f)}</button>`).join('')}
+        </div>
+        <div class="committee-grid">${committeeCards}</div>
+      </div>`;
+    }
+
+    const upcoming = records
+      .filter(r=>r.nextAction && r.dueDate)
+      .sort((a,b)=> a.dueDate.localeCompare(b.dueDate))
+      .slice(0,6)
+      .map(r=>{
+        const diff = Math.floor((new Date(r.dueDate) - new Date(todayISO())) / 86400000);
+        let tagClass='ok', tagText=fmt(r.dueDate);
+        if(diff < 0){ tagClass='overdue'; tagText='期限超過'; }
+        else if(diff <= 3){ tagClass='soon'; tagText=diff===0?'本日':`あと${diff}日`; }
+        return `<div class="action-row rowlink" data-view-id="${r.id}" style="cursor:pointer">
+          <div><div class="who">${escapeHTML(displayTitle(r))}</div><div class="what">${escapeHTML(r.nextAction)}</div></div>
+          <span class="due-tag ${tagClass}">${tagText}</span>
+        </div>`;
+      }).join('') || `<div class="empty-note">現在、期日つきの次のアクションはありません。</div>`;
+
+    const recent = [...records].sort((a,b)=>b.createdAt-a.createdAt).slice(0,6).map(r=>`
+      <div class="action-row rowlink" data-view-id="${r.id}" style="cursor:pointer">
+        <div><div class="who">${escapeHTML(displayTitle(r))}</div><div class="what">${fmt(r.date)}・${escapeHTML(r.facility||'')}</div></div>
+        <span class="type-badge ${r.type}"><span class="dot"></span>${TYPE_META[r.type].label}</span>
+      </div>`).join('');
+
+    app.innerHTML = `
+      <div class="page-head">
+        <div>
+          <h1>ダッシュボード</h1>
+          <p class="lede">今月の委員会開催状況と、対応が必要な次のアクションをひと目で確認できます。</p>
+        </div>
+        ${canEditAny() ? `<button class="btn btn-primary" data-nav="new">＋ 新規記録を作成</button>` : ''}
+      </div>
+      ${monthBand}
+      <div class="dash-cols">
+        <div class="panel">
+          <h3>対応が必要な次のアクション</h3>
+          ${upcoming}
+        </div>
+        <div class="panel">
+          <h3>最近の記録</h3>
+          ${recent || '<div class="empty-note">まだ記録がありません。</div>'}
+        </div>
+      </div>
+    `;
+
+    app.querySelectorAll('[data-dash-facility]').forEach(b=>b.addEventListener('click', ()=>{ state.dashFacility=b.dataset.dashFacility; render(); }));
+    app.querySelectorAll('[data-view-id]').forEach(b=>b.addEventListener('click', ()=>{ state.editingId=b.dataset.viewId; state.view='detail'; render(); }));
+    app.querySelectorAll('[data-new-committee]').forEach(b=>b.addEventListener('click', ()=>{ openEditor(null, { type:'committee', committeeId:b.dataset.newCommittee, facility:state.dashFacility }); }));
+  }
+
+  // ---------- List ----------
+  function renderList(){
+    setActiveNav('list');
+    const visible = viewableTypes();
+    if(state.filterType !== 'all' && !visible.includes(state.filterType)) state.filterType = 'all';
+    const q = state.search.trim();
+    let rows = [...records].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    if(state.filterType !== 'all') rows = rows.filter(r=>r.type===state.filterType);
+    if(q) rows = rows.filter(r => (r.title+r.facility+r.recorder+(r.sections||[]).map(s=>s.heading+s.body).join('')).includes(q));
+
+    const tableRows = rows.map(r=>{
+      const preview = (r.sections && r.sections[0] && r.sections[0].body) ? r.sections[0].body.split('\n')[0] : '';
+      return `<tr class="rowlink" data-view-id="${r.id}">
+        <td><span class="type-badge ${r.type}"><span class="dot"></span>${TYPE_META[r.type].label}</span></td>
+        <td>${fmt(r.date)}</td>
+        <td><div class="cell-title">${escapeHTML(displayTitle(r))}</div><div class="cell-sub">${escapeHTML(r.facility||'')}${r.role?'・'+escapeHTML(r.role):''}</div></td>
+        <td class="cell-preview">${escapeHTML(preview)}</td>
+        <td class="cell-sub">${escapeHTML(r.nextAction||'—')}${r.dueDate?' ('+fmt(r.dueDate)+')':''}</td>
+        <td class="cell-sub">${escapeHTML(r.recorder||'—')}</td>
+      </tr>`;
+    }).join('');
+
+    app.innerHTML = `
+      <div class="page-head">
+        <div>
+          <h1>記録一覧</h1>
+          <p class="lede">スタッフ面談・委員会・会議・商談の記録をまとめて検索できます。</p>
+        </div>
+        ${canEditAny() ? `<button class="btn btn-primary" data-nav="new">＋ 新規記録を作成</button>` : ''}
+      </div>
+      <div class="toolbar">
+        <div class="type-tabs">
+          <button class="type-tab ${state.filterType==='all'?'active':''}" data-filter="all">すべて</button>
+          ${visible.map(t=>`<button class="type-tab ${state.filterType===t?'active':''}" data-filter="${t}">${TYPE_META[t].label}</button>`).join('')}
+        </div>
+        <input class="search-input" placeholder="氏名・施設・内容で検索" value="${escapeHTML(state.search)}" id="searchBox">
+        <button class="btn btn-ghost" id="exportBtn">CSVで書き出す</button>
+      </div>
+      <table class="records">
+        <thead><tr><th>種別</th><th>日付</th><th>相手・会議名</th><th>内容のプレビュー</th><th>次のアクション</th><th>記入者</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="6" class="empty-note" style="padding:24px;">該当する記録がありません。</td></tr>`}</tbody>
+      </table>
+    `;
+
+    app.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click', ()=>{ state.filterType=b.dataset.filter; render(); }));
+    app.querySelectorAll('[data-view-id]').forEach(b=>b.addEventListener('click', ()=>{ state.editingId=b.dataset.viewId; state.view='detail'; render(); }));
+    const sbBox = document.getElementById('searchBox');
+    sbBox.addEventListener('input', ()=>{ state.search = sbBox.value; });
+    sbBox.addEventListener('keyup', (e)=>{ if(e.key==='Enter'){ render(); } });
+    document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  }
+
+  function exportCSV(){
+    const header = ['種別','日付','相手・会議名','施設','記入者','次のアクション','期日'];
+    const lines = [header.join(',')];
+    records.forEach(r=>{
+      lines.push([TYPE_META[r.type].label, r.date, r.title, r.facility, r.recorder, r.nextAction, r.dueDate].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+    });
+    const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'records.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------- 委員会マスタの設定（管理者のみ） ----------
+  function renderCommitteeSettings(){
+    setActiveNav('dashboard');
+    if(!myPermissions.is_admin){ state.view='dashboard'; toast('この画面は管理者のみ利用できます'); return renderDashboard(); }
+
+    app.innerHTML = `
+      <div class="page-head">
+        <div>
+          <h1>委員会の設定</h1>
+          <p class="lede">ダッシュボードの「今月の委員会開催状況」に表示する委員会を管理します。</p>
+        </div>
+        <button class="btn btn-ghost" data-nav="dashboard">ダッシュボードへ戻る</button>
+      </div>
+      <div class="panel" style="max-width:560px;">
+        <div id="committeeSettingsList"></div>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+          <input type="text" id="newCommitteeName" placeholder="新しい委員会名を入力">
+          <button class="btn btn-primary" id="addCommitteeBtn">追加</button>
+        </div>
+      </div>
+    `;
+    renderCommitteeSettingsList();
+    document.getElementById('addCommitteeBtn').addEventListener('click', addCommittee);
+    document.getElementById('newCommitteeName').addEventListener('keyup', (e)=>{ if(e.key==='Enter') addCommittee(); });
+  }
+
+  function renderCommitteeSettingsList(){
+    const listEl = document.getElementById('committeeSettingsList');
+    listEl.innerHTML = COMMITTEES.length ? COMMITTEES.map(c=>`
+      <div class="settings-row" data-id="${c.id}">
+        <input type="text" class="committee-name-input" value="${escapeHTML(c.name)}">
+        <button class="btn btn-ghost btn-danger" data-del-committee="${c.id}">削除</button>
+      </div>
+    `).join('') : `<div class="empty-note">委員会が登録されていません。下から追加してください。</div>`;
+
+    listEl.querySelectorAll('.committee-name-input').forEach(inp=>{
+      inp.addEventListener('change', async ()=>{
+        const row = inp.closest('.settings-row');
+        const id = row.dataset.id;
+        const newName = inp.value.trim();
+        if(!newName){ toast('委員会名を入力してください'); return; }
+        const { error } = await sbClient.from('committees').update({ name:newName }).eq('id', id);
+        if(error){ toast('保存に失敗しました'); return; }
+        const c = COMMITTEES.find(x=>x.id===id);
+        if(c) c.name = newName;
+        toast('保存しました');
+      });
+    });
+    listEl.querySelectorAll('[data-del-committee]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.delCommittee;
+        if(!confirm('この委員会を削除しますか？（過去の記録は削除されません）')) return;
+        const { error } = await sbClient.from('committees').delete().eq('id', id);
+        if(error){ toast('削除に失敗しました'); return; }
+        COMMITTEES = COMMITTEES.filter(c=>c.id!==id);
+        renderCommitteeSettingsList();
+        toast('削除しました');
+      });
+    });
+  }
+
+  async function addCommittee(){
+    const input = document.getElementById('newCommitteeName');
+    const name = input.value.trim();
+    if(!name){ toast('委員会名を入力してください'); return; }
+    const sortOrder = COMMITTEES.length ? Math.max(...COMMITTEES.map(c=>c.sortOrder||0)) + 1 : 1;
+    const { data, error } = await sbClient.from('committees').insert({ name, sort_order: sortOrder }).select().single();
+    if(error){ toast('追加に失敗しました'); return; }
+    COMMITTEES.push({ id:data.id, name:data.name, sortOrder:data.sort_order });
+    input.value = '';
+    renderCommitteeSettingsList();
+    toast('委員会を追加しました');
+  }
+
+  // ---------- Editor ----------
+  function openEditor(id, presets){
+    if(!id && !canEditAny()){ toast('作成できる記録がありません'); return; }
+    state.editingId = id;
+    if(id){
+      const rec = records.find(r=>r.id===id);
+      if(!rec || !canEdit(rec.type)){ toast('この記録を編集する権限がありません'); return; }
+      state.draft = JSON.parse(JSON.stringify(rec));
+      if(!state.draft.confirmations) state.draft.confirmations = [];
+    } else {
+      const defaultType = (presets && presets.type) || editableTypes()[0] || 'staff';
+      state.draft = Object.assign({
+        id:uid(), type:defaultType, date:todayISO(), title:'', committeeId:'', facility:FACILITIES[0], role:'', recorder:'', location:'',
+        sections:[{heading:'概要', body:''}], nextAction:'', dueDate:'', confirmations:[], createdAt:Date.now()
+      }, presets||{});
+      if(!state.draft.confirmations) state.draft.confirmations = [];
+      if(state.draft.type==='committee' && state.draft.committeeId){
+        const match = COMMITTEES.find(c=>c.id===state.draft.committeeId);
+        if(match) state.draft.title = match.name;
+      }
+    }
+    state.view = 'edit';
+    render();
+  }
+
+  function renderEditor(){
+    setActiveNav('new');
+    const editable = editableTypes();
+    if(editable.length===0){ state.view='list'; toast('編集権限がありません'); return renderList(); }
+    const d = state.draft;
+    if(!editable.includes(d.type)) d.type = editable[0];
+    const isCommittee = d.type === 'committee';
+
+    const titleField = isCommittee
+      ? (COMMITTEES.length
+          ? `<div class="field"><label>委員会名<span class="req">*</span></label>
+              <select id="f_committee">${COMMITTEES.map(c=>`<option value="${c.id}" ${c.id===d.committeeId?'selected':''}>${escapeHTML(c.name)}</option>`).join('')}</select>
+            </div>`
+          : `<div class="field"><label>委員会名<span class="req">*</span></label>
+              <p style="font-size:12px; color:var(--danger); margin:8px 0 0;">委員会がまだ登録されていません。${myPermissions.is_admin ? '「委員会を編集」から追加してください。' : '管理者に委員会の登録を依頼してください。'}</p>
+            </div>`)
+      : `<div class="field"><label>${d.type==='staff'?'相手（氏名）':d.type==='deal'?'相手（会社・担当者）':'会議名'}<span class="req">*</span></label>
+          <input id="f_title" type="text" value="${escapeHTML(d.title)}" placeholder="${d.type==='staff'?'例）山田 太郎':d.type==='deal'?'例）〇〇銀行 名古屋駅前支店':'例）月次運営会議'}">
+        </div>`;
+
+    const roleField = d.type==='staff'
+      ? `<div class="field"><label>職種<span class="opt">（任意）</span></label><input id="f_role" type="text" value="${escapeHTML(d.role)}" placeholder="例）介護職員"></div>`
+      : `<div class="field"><label>場所<span class="opt">（任意）</span></label><input id="f_location" type="text" value="${escapeHTML(d.location)}" placeholder="例）2階会議室"></div>`;
+
+    app.innerHTML = `
+      <div class="page-head">
+        <h1>${state.editingId ? '記録を編集' : '新規記録の作成'}</h1>
+        <button class="btn btn-ghost" data-nav="list">一覧へ戻る</button>
+      </div>
+      <div class="form-wrap">
+        <div class="form-tabs">
+          ${editable.map(t=>`<button class="form-tab ${d.type===t?'active':''}" data-type="${t}">${TYPE_META[t].label}</button>`).join('')}
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>実施日<span class="req">*</span></label><input id="f_date" type="date" value="${d.date}"></div>
+          ${titleField}
+          <div class="field"><label>施設・部署<span class="opt">（任意）</span></label>
+            <select id="f_facility">${FACILITIES.map(f=>`<option ${f===d.facility?'selected':''}>${escapeHTML(f)}</option>`).join('')}</select>
+          </div>
+          ${roleField}
+          <div class="field"><label>記入者<span class="opt">（任意）</span></label><input id="f_recorder" type="text" value="${escapeHTML(d.recorder)}" placeholder="例）石川"></div>
+          ${d.type!=='staff' ? `<div class="field"><label>職種<span class="opt">（任意）</span></label><input id="f_role2" type="text" value="${escapeHTML(d.role)}" placeholder="任意"></div>` : `<div class="field"><label>場所<span class="opt">（任意）</span></label><input id="f_location2" type="text" value="${escapeHTML(d.location)}" placeholder="例）面談室"></div>`}
+        </div>
+        <details class="import-panel">
+          <summary>Word・テキストで作成済みの記録を取り込む</summary>
+          <p class="hint">Word（.docx）またはPDFファイルをアップロードするか、本文をコピー＆ペーストすると、内容を見出しごとに自動で振り分けて下の項目に取り込みます（日付らしき記載があれば実施日も取り込みます）。取り込み後の内容・見出しの区切りは必要に応じて修正してください。スキャン画像のみのPDF（文字が選択できないもの）は読み取れません。</p>
+          <div class="import-body">
+            <div class="import-col">
+              <label>Wordファイル（.docx）／ PDFファイル</label>
+              <input type="file" id="importFile" accept=".docx,.pdf">
+            </div>
+            <div class="import-col">
+              <label>本文を貼り付け</label>
+              <textarea id="importPaste" placeholder="Wordなどからコピーした本文をここに貼り付けてください"></textarea>
+              <button class="confirm-add-btn" id="importPasteBtn">貼り付けた内容を取り込む</button>
+            </div>
+          </div>
+        </details>
+        <div class="sections" id="sectionsWrap"></div>
+        ${d.type==='committee' ? `<div class="confirm-block" id="confirmWrap"></div>` : ''}
+        <div class="form-footer">
+          <div class="next-fields">
+            <input type="text" id="f_nextaction" placeholder="次のアクション（任意）例）資格支援の資料を送付する" value="${escapeHTML(d.nextAction)}">
+            <input type="date" id="f_duedate" value="${d.dueDate||''}">
+          </div>
+          <div style="display:flex; gap:8px;">
+            ${state.editingId ? `<button class="btn btn-danger" id="deleteBtn">削除</button>` : ''}
+            <button class="btn btn-primary" id="saveBtn">保存する</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    renderSections();
+    if(d.type==='committee') renderConfirmations();
+
+    document.getElementById('importFile').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const isPdf = /\.pdf$/i.test(file.name);
+      try{
+        if(isPdf){
+          if(typeof pdfjsLib === 'undefined'){ toast('PDFの読み込み機能を利用できませんでした。本文を貼り付けてお試しください'); return; }
+          toast('PDFを読み込んでいます…');
+          const text = await extractPdfText(file);
+          if(!text.trim()){ toast('このPDFから文字を読み取れませんでした（スキャン画像のみの可能性があります）'); return; }
+          applyImportedText(text);
+        } else {
+          if(typeof mammoth === 'undefined'){ toast('Wordの読み込み機能を利用できませんでした。本文を貼り付けてお試しください'); return; }
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({arrayBuffer});
+          applyImportedText(result.value);
+        }
+      }catch(err){
+        toast('ファイルの読み込みに失敗しました');
+      }
+    });
+    document.getElementById('importPasteBtn').addEventListener('click', ()=>{
+      const text = document.getElementById('importPaste').value;
+      if(!text.trim()){ toast('貼り付けられた本文がありません'); return; }
+      applyImportedText(text);
+    });
+
+    app.querySelectorAll('[data-type]').forEach(b=>b.addEventListener('click', ()=>{
+      syncDraftFromForm();
+      const prevType = d.type;
+      d.type = b.dataset.type;
+      if(d.type==='committee'){
+        if(!d.committeeId && COMMITTEES.length) d.committeeId = COMMITTEES[0].id;
+        const match = COMMITTEES.find(c=>c.id===d.committeeId);
+        d.title = match ? match.name : '';
+      } else if(prevType==='committee'){
+        d.title = '';
+      }
+      renderEditor();
+    }));
+
+    const idField = isCommittee ? document.getElementById('f_committee') : document.getElementById('f_title');
+    if(isCommittee && idField){
+      idField.addEventListener('change', ()=>{ d.committeeId = idField.value; d.title = COMMITTEES.find(c=>c.id===idField.value).name; });
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async ()=>{
+      syncDraftFromForm();
+      if(!d.date || (!d.title)){ toast('実施日と相手・会議名は必須です'); return; }
+      const payload = toDbRow(d);
+      let result;
+      if(state.editingId){
+        result = await sbClient.from('records').update(payload).eq('id', d.id).select().single();
+      } else {
+        result = await sbClient.from('records').insert(payload).select().single();
+      }
+      if(result.error){ toast('保存に失敗しました: ' + result.error.message); return; }
+      const saved = fromDbRow(result.data);
+      const idx = records.findIndex(r=>r.id===saved.id);
+      if(idx>=0) records[idx]=saved; else records.push(saved);
+      state.editingId = saved.id;
+      state.view='detail';
+      render();
+      toast('記録を保存しました');
+    });
+
+    const delBtn = document.getElementById('deleteBtn');
+    if(delBtn) delBtn.addEventListener('click', async ()=>{
+      const { error } = await sbClient.from('records').delete().eq('id', d.id);
+      if(error){ toast('削除に失敗しました'); return; }
+      records = records.filter(r=>r.id!==d.id);
+      state.view='list';
+      render();
+      toast('記録を削除しました');
+    });
+  }
+
+  function renderSections(){
+    const d = state.draft;
+    const wrap = document.getElementById('sectionsWrap');
+    wrap.innerHTML = d.sections.map((s,i)=>`
+      <div class="section-block">
+        <div class="heading-row">
+          <input class="heading" data-sec-heading="${i}" value="${escapeHTML(s.heading)}" placeholder="見出し（例：面談の概要）">
+          ${d.sections.length>1 ? `<button class="section-remove" data-sec-remove="${i}">削除</button>` : ''}
+        </div>
+        <textarea data-sec-body="${i}" placeholder="1行につき1項目を入力してください">${escapeHTML(s.body)}</textarea>
+      </div>
+    `).join('') + `<button class="add-section" id="addSection">＋ 項目を追加</button>`;
+
+    wrap.querySelectorAll('[data-sec-heading]').forEach(inp=>inp.addEventListener('input', ()=>{ d.sections[inp.dataset.secHeading].heading = inp.value; }));
+    wrap.querySelectorAll('[data-sec-body]').forEach(ta=>ta.addEventListener('input', ()=>{ d.sections[ta.dataset.secBody].body = ta.value; }));
+    wrap.querySelectorAll('[data-sec-remove]').forEach(b=>b.addEventListener('click', ()=>{ syncDraftFromForm(); d.sections.splice(Number(b.dataset.secRemove),1); renderSections(); }));
+    document.getElementById('addSection').addEventListener('click', ()=>{ syncDraftFromForm(); d.sections.push({heading:'', body:''}); renderSections(); });
+  }
+
+  function renderConfirmations(){
+    const d = state.draft;
+    const wrap = document.getElementById('confirmWrap');
+    if(!wrap) return;
+    const hasRoster = ROSTER_NAMES.length > 0;
+    const availableRoster = ROSTER_NAMES.filter(n => !d.confirmations.includes(n));
+    wrap.innerHTML = `
+      <h3>確認署名</h3>
+      <p class="hint">この委員会記録を確認したスタッフを${hasRoster ? '、名簿から選ぶか名前を直接入力して' : '名前を入力して'}追加してください（複数人可）。</p>
+      <div class="confirm-controls">
+        ${hasRoster ? `
+        <select id="confirmRosterSelect">
+          <option value="">名簿から選ぶ…</option>
+          ${availableRoster.map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join('')}
+        </select>
+        <button class="confirm-add-btn" id="confirmRosterAdd">名簿から追加</button>` : ''}
+        <input type="text" id="confirmNameInput" placeholder="${hasRoster ? '名簿にない場合はここに氏名を入力' : '氏名を入力'}">
+        <button class="confirm-add-btn" id="confirmNameAdd">追加</button>
+      </div>
+      <div class="confirm-chips">
+        ${d.confirmations.length ? d.confirmations.map((n,i)=>`<span class="confirm-chip">${escapeHTML(n)}<button data-confirm-remove="${i}">×</button></span>`).join('') : `<span class="confirm-empty">まだ誰も確認していません</span>`}
+      </div>
+    `;
+    const rosterAddBtn = wrap.querySelector('#confirmRosterAdd');
+    if(rosterAddBtn){
+      rosterAddBtn.addEventListener('click', ()=>{
+        const sel = wrap.querySelector('#confirmRosterSelect');
+        if(sel.value && !d.confirmations.includes(sel.value)){ d.confirmations.push(sel.value); renderConfirmations(); }
+      });
+    }
+    wrap.querySelector('#confirmNameAdd').addEventListener('click', ()=>{
+      const inp = wrap.querySelector('#confirmNameInput');
+      const name = inp.value.trim();
+      if(name && !d.confirmations.includes(name)){ d.confirmations.push(name); renderConfirmations(); }
+    });
+    wrap.querySelector('#confirmNameInput').addEventListener('keyup', (e)=>{
+      if(e.key==='Enter'){ wrap.querySelector('#confirmNameAdd').click(); }
+    });
+    wrap.querySelectorAll('[data-confirm-remove]').forEach(b=>b.addEventListener('click', ()=>{
+      d.confirmations.splice(Number(b.dataset.confirmRemove),1); renderConfirmations();
+    }));
+  }
+
+  async function extractPdfText(file){
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for(let i=1; i<=pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      let lines = [];
+      let currentLine = '';
+      let lastY = null;
+      content.items.forEach(item=>{
+        const y = item.transform[5];
+        if(lastY !== null && Math.abs(y - lastY) > 2){
+          lines.push(currentLine.trim());
+          currentLine = '';
+        }
+        currentLine += item.str;
+        lastY = y;
+      });
+      if(currentLine.trim()) lines.push(currentLine.trim());
+      fullText += lines.join('\n') + '\n\n';
+    }
+    return fullText;
+  }
+
+  function parseImportedText(text){
+    // 日付らしき記載（2026年9月15日 / 2026/09/15 / 2026-09-15）を検出
+    let foundDate = null;
+    const m = text.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})日?/);
+    if(m){ foundDate = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`; }
+
+    // 空行区切りでブロック化 → 各ブロックの先頭行を見出し、残りを箇条書きとして扱う
+    const blocks = text.replace(/\r/g,'').split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+    const bulletStrip = /^[・\-‐−●○◯\*\u2022]\s*|^\d+[\.\)、]\s*/;
+    const sections = blocks.map(block=>{
+      const lines = block.split('\n').map(l=>l.trim()).filter(Boolean);
+      if(lines.length === 0) return null;
+      const looksLikeHeading = lines[0].length <= 24 && !bulletStrip.test(lines[0]) && lines.length > 1;
+      const heading = looksLikeHeading ? lines[0].replace(/[：:]\s*$/,'') : '取り込んだ内容';
+      const bodyLines = looksLikeHeading ? lines.slice(1) : lines;
+      const body = bodyLines.map(l=>l.replace(bulletStrip,'')).join('\n');
+      return { heading, body };
+    }).filter(Boolean);
+
+    return { date: foundDate, sections: sections.length ? sections : [{heading:'取り込んだ内容', body:text.trim()}] };
+  }
+
+  function applyImportedText(text){
+    const d = state.draft;
+    const parsed = parseImportedText(text);
+    if(parsed.date) d.date = parsed.date;
+    const isDefaultEmpty = d.sections.length===1 && !d.sections[0].body.trim();
+    if(isDefaultEmpty) d.sections = parsed.sections;
+    else d.sections = d.sections.concat(parsed.sections);
+    renderSections();
+    const dateField = document.getElementById('f_date');
+    if(dateField && parsed.date) dateField.value = parsed.date;
+    toast('内容を取り込みました。見出しの区切りや日付は自動判定のため、内容をご確認ください');
+  }
+
+  function syncDraftFromForm(){
+    const d = state.draft;
+    const get = id => { const el=document.getElementById(id); return el ? el.value : undefined; };
+    if(get('f_date')!==undefined) d.date = get('f_date');
+    if(get('f_title')!==undefined) d.title = get('f_title');
+    if(get('f_facility')!==undefined) d.facility = get('f_facility');
+    if(get('f_recorder')!==undefined) d.recorder = get('f_recorder');
+    if(get('f_role')!==undefined) d.role = get('f_role');
+    if(get('f_role2')!==undefined) d.role = get('f_role2');
+    if(get('f_location')!==undefined) d.location = get('f_location');
+    if(get('f_location2')!==undefined) d.location = get('f_location2');
+    if(get('f_nextaction')!==undefined) d.nextAction = get('f_nextaction');
+    if(get('f_duedate')!==undefined) d.dueDate = get('f_duedate');
+  }
+
+  // ---------- Detail (read only) ----------
+  function renderDetail(){
+    setActiveNav('list');
+    const r = records.find(x=>x.id===state.editingId);
+    if(!r){ state.view='list'; return render(); }
+    const sections = (r.sections||[]).map(s=>`
+      <div class="detail-section">
+        <h4>${escapeHTML(s.heading||'（見出しなし）')}</h4>
+        <ul>${(s.body||'').split('\n').filter(l=>l.trim()).map(l=>`<li>${escapeHTML(l)}</li>`).join('') || '<li style="color:var(--ink-faint)">記載なし</li>'}</ul>
+      </div>`).join('');
+
+    const confirmSection = (r.type==='committee') ? `
+      <div class="detail-section">
+        <h4>確認署名</h4>
+        ${ (r.confirmations && r.confirmations.length)
+            ? `<div class="confirm-chips print-signatures">${r.confirmations.map(n=>`<span class="confirm-chip" style="background:var(--bg); border:1px solid var(--border-strong);">${escapeHTML(n)}</span>`).join('')}</div>`
+            : `<p style="margin:0; color:var(--ink-faint); font-size:12.5px;">まだ確認署名がありません。</p>` }
+      </div>` : '';
+
+    app.innerHTML = `
+      <div class="page-head">
+        <div>
+          <span class="type-badge ${r.type}" style="margin-bottom:8px;"><span class="dot"></span>${TYPE_META[r.type].label}</span>
+          <h1 style="margin-top:8px;">${escapeHTML(displayTitle(r))}</h1>
+          <p class="lede">${fmt(r.date)}・${escapeHTML(r.facility||'')}${r.role?'・'+escapeHTML(r.role):''}${r.recorder?'・記入者: '+escapeHTML(r.recorder):''}</p>
+        </div>
+        <div class="no-print" style="display:flex; gap:8px;">
+          <button class="btn btn-ghost" data-nav="list">一覧へ戻る</button>
+          ${canEdit(r.type) ? `<button class="btn btn-primary" id="editThis">編集する</button>` : ''}
+          <button class="btn" id="printThis">🖨 印刷 / PDFで保存</button>
+        </div>
+      </div>
+      <div class="form-wrap" id="printArea">
+        <div class="detail-body">
+          ${sections}
+          ${r.nextAction ? `<div class="detail-section"><h4>次のアクション</h4><p style="margin:0;">${escapeHTML(r.nextAction)}${r.dueDate?'（期日: '+fmt(r.dueDate)+'）':''}</p></div>` : ''}
+          ${confirmSection}
+        </div>
+      </div>
+    `;
+    const editBtn = document.getElementById('editThis');
+    if(editBtn) editBtn.addEventListener('click', ()=> openEditor(r.id));
+    document.getElementById('printThis').addEventListener('click', ()=> window.print());
+  }
+
+  initApp();
+})();
+</script>
+</body>
+</html>
