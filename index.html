@@ -228,14 +228,14 @@
   .section-block .heading-row{ display:flex; gap:10px; margin-bottom:8px; }
   .section-block input.heading{ font-weight:700; border:none; background:transparent; padding:2px 0; border-bottom:1px solid transparent; flex:1; font-size:14px; }
   .section-block input.heading:focus{ outline:none; border-bottom-color:var(--border-strong); }
-  .section-heading-label{ font-weight:700; font-size:14px; margin-bottom:8px; color:var(--ink); }
+  .section-heading-label{ font-weight:700; font-size:14px; margin-bottom:8px; color:var(--accent); }
   .section-block textarea{ width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:10px 12px; resize:vertical; min-height:160px; background:var(--surface); }
   .section-remove{ border:none; background:none; color:var(--ink-faint); font-size:12px; }
   .section-remove:hover{ color:var(--danger); }
   .add-section{ border:1px dashed var(--border-strong); border-radius:var(--radius); background:transparent; color:var(--ink-soft); padding:9px; width:100%; font-size:12.5px; }
   .add-section:hover{ border-color:var(--primary); color:var(--primary); }
-  .confirm-block{ padding:0 24px 22px; }
-  .confirm-block h3{ font-size:13.5px; margin:0 0 4px; font-weight:700; }
+  .confirm-block{ margin:0 24px 14px; border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; background:var(--bg); }
+  .confirm-block h3{ font-family:'Noto Sans JP', sans-serif; font-size:14px; margin:0 0 8px; font-weight:700; color:var(--accent); }
   .confirm-block .hint{ font-size:13px; color:#3D4A43; line-height:1.7; margin:0 0 12px; }
   .confirm-controls{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .confirm-controls select, .confirm-controls input[type=text]{
@@ -243,16 +243,16 @@
   }
   .confirm-controls select{ min-width:150px; }
   .confirm-controls input[type=text]{ flex:1; min-width:140px; }
-  .confirm-add-btn{ border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); padding:7px 12px; font-size:12.5px; color:var(--ink-soft); }
+  .confirm-add-btn{ border:1px solid var(--border-strong); background:var(--surface); border-radius:var(--radius); padding:8px 14px; font-size:14px; color:var(--ink-soft); }
   .confirm-add-btn:hover{ border-color:var(--primary); color:var(--primary); }
   .confirm-chips{ display:flex; flex-wrap:wrap; gap:8px; }
   .confirm-chip{
     display:inline-flex; align-items:center; gap:8px; background:var(--primary-soft); color:var(--primary-deep);
-    border-radius:20px; padding:5px 8px 5px 12px; font-size:12.5px;
+    border-radius:20px; padding:6px 10px 6px 14px; font-size:14px;
   }
-  .confirm-chip button{ border:none; background:none; color:var(--primary-deep); opacity:.6; font-size:12px; line-height:1; padding:0 2px; }
+  .confirm-chip button{ border:none; background:none; color:var(--primary-deep); opacity:.6; font-size:13px; line-height:1; padding:0 2px; }
   .confirm-chip button:hover{ opacity:1; }
-  .confirm-empty{ color:var(--ink-faint); font-size:12px; }
+  .confirm-empty{ color:var(--ink-faint); font-size:14px; }
   .import-panel{ margin:0 24px 20px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); padding:16px 18px; }
   .import-panel summary{ cursor:pointer; font-size:13px; font-weight:600; color:var(--ink); list-style:none; display:flex; align-items:center; gap:6px; }
   .import-panel summary::-webkit-details-marker{ display:none; }
@@ -327,6 +327,7 @@
     <button class="nav-item" data-nav="dashboard"><span class="nav-dot"></span>ダッシュボード</button>
     <div id="newRecordNavSlot"></div>
     <button class="nav-item" data-nav="list"><span class="nav-dot"></span>記録一覧</button>
+    <div id="trashNavSlot"></div>
     <div class="sidebar-footer">
       <div id="userBadge"></div>
       <div style="margin-top:14px;">
@@ -361,7 +362,7 @@
     meeting:{ label:'会議' },
     deal:{ label:'商談' }
   };
-  const ALL_TYPES = ['staff','committee','meeting','deal'];
+  const ALL_TYPES = ['committee','staff','meeting','deal'];
 
   let records = [];
   let ROSTER_NAMES = [];
@@ -399,7 +400,8 @@
       id: row.id, type: row.type, committeeId: row.committee_id || '', date: row.date, title: row.title,
       facility: row.facility, role: row.role, location: row.location, recorder: row.recorder,
       sections: row.sections || [], nextAction: row.next_action || '', dueDate: row.due_date || '',
-      confirmations: row.confirmations || [], attendees: row.attendees || [], createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
+      confirmations: row.confirmations || [], attendees: row.attendees || [], deletedAt: row.deleted_at || null,
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
     };
   }
   function toDbRow(r){
@@ -445,6 +447,8 @@
   function renderSidebarExtras(){
     const slot = document.getElementById('newRecordNavSlot');
     slot.innerHTML = canEditAny() ? `<button class="nav-item" data-nav="new"><span class="nav-dot"></span>新規記録を作成</button>` : '';
+    const trashSlot = document.getElementById('trashNavSlot');
+    trashSlot.innerHTML = canEditAny() ? `<button class="nav-item" data-nav="trash"><span class="nav-dot"></span>削除済み一覧</button>` : '';
     const badge = document.getElementById('userBadge');
     badge.innerHTML = `
       <div class="user-name">${escapeHTML(myPermissions.display_name || currentUser.email)}</div>
@@ -480,10 +484,17 @@
 
   // ---------- 記録の読み込み ----------
   async function loadRecords(){
-    const { data, error } = await sbClient.from('records').select('*').order('date', { ascending:false });
+    const { data, error } = await sbClient.from('records').select('*').is('deleted_at', null).order('date', { ascending:false });
     if(error){ toast('記録の読み込みに失敗しました'); records = []; }
     else { records = data.map(fromDbRow); }
     render();
+  }
+
+  let deletedRecords = [];
+  async function loadDeletedRecords(){
+    const { data, error } = await sbClient.from('records').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending:false });
+    if(error){ toast('削除済み一覧の読み込みに失敗しました'); deletedRecords = []; }
+    else { deletedRecords = data.map(fromDbRow); }
   }
 
   async function loadRoster(){
@@ -508,6 +519,12 @@
     if(navBtn){
       const nav = navBtn.dataset.nav;
       if(nav === 'new'){ if(canEditAny()) openEditor(null); }
+      else if(nav === 'trash'){
+        if(!canEditAny()) return;
+        state.view = 'trash';
+        render();
+        loadDeletedRecords().then(render);
+      }
       else { state.view = nav; render(); }
     }
   });
@@ -527,6 +544,7 @@
     if(state.view === 'list'){ setDocTitle('記録一覧'); return renderList(); }
     if(state.view === 'edit'){ setDocTitle(state.draft && state.draft.title ? state.draft.title : '新規記録の作成'); return renderEditor(); }
     if(state.view === 'committees'){ setDocTitle('委員会の設定'); return renderCommitteeSettings(); }
+    if(state.view === 'trash'){ setDocTitle('削除済み一覧'); return renderTrash(); }
     if(state.view === 'detail'){
       const r = records.find(x=>x.id===state.editingId);
       setDocTitle(r ? displayTitle(r) : '');
@@ -685,6 +703,64 @@
     URL.revokeObjectURL(url);
   }
 
+  function fmtDateTime(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    if(isNaN(d)) return iso;
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  // ---------- 削除済み一覧 ----------
+  function renderTrash(){
+    setActiveNav('trash');
+    const rows = [...deletedRecords].sort((a,b)=> (b.deletedAt||'').localeCompare(a.deletedAt||''));
+    const tableRows = rows.map(r=>`
+      <tr>
+        <td><span class="type-badge ${r.type}"><span class="dot"></span>${TYPE_META[r.type].label}</span></td>
+        <td class="cell-sub">${fmtDateTime(r.deletedAt)}</td>
+        <td><div class="cell-title">${escapeHTML(displayTitle(r))}</div><div class="cell-sub">${escapeHTML(r.facility||'')}</div></td>
+        <td style="white-space:nowrap;">
+          ${canEdit(r.type) ? `<button class="btn btn-ghost" data-restore-id="${r.id}" style="font-size:12.5px; padding:6px 10px;">復元</button>` : ''}
+          ${myPermissions.can_purge ? `<button class="btn btn-ghost btn-danger" data-purge-id="${r.id}" style="font-size:12.5px; padding:6px 10px;">完全に削除</button>` : ''}
+          ${(!canEdit(r.type) && !myPermissions.can_purge) ? '<span class="cell-sub">閲覧権限のみ</span>' : ''}
+        </td>
+      </tr>
+    `).join('');
+
+    app.innerHTML = `
+      <div class="page-head">
+        <div>
+          <h1>削除済み一覧</h1>
+          <p class="lede">削除した記録は、ここから元に戻すか、完全に削除できます。</p>
+        </div>
+        <button class="btn btn-ghost" data-nav="list">記録一覧へ戻る</button>
+      </div>
+      <table class="records">
+        <thead><tr><th>種別</th><th>削除日時</th><th>相手・会議名</th><th>操作</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="4" class="empty-note" style="padding:24px;">削除済みの記録はありません。</td></tr>`}</tbody>
+      </table>
+    `;
+
+    app.querySelectorAll('[data-restore-id]').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.restoreId;
+      const { error } = await sbClient.from('records').update({ deleted_at: null }).eq('id', id);
+      if(error){ toast('復元に失敗しました'); return; }
+      deletedRecords = deletedRecords.filter(r=>r.id!==id);
+      await loadRecords();
+      renderTrash();
+      toast('記録を復元しました');
+    }));
+    app.querySelectorAll('[data-purge-id]').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.purgeId;
+      if(!confirm('完全に削除します。この操作は取り消せません。よろしいですか？')) return;
+      const { error } = await sbClient.from('records').delete().eq('id', id);
+      if(error){ toast('削除に失敗しました'); return; }
+      deletedRecords = deletedRecords.filter(r=>r.id!==id);
+      renderTrash();
+      toast('完全に削除しました');
+    }));
+  }
+
   // ---------- 委員会マスタの設定（管理者のみ） ----------
   function renderCommitteeSettings(){
     setActiveNav('dashboard');
@@ -816,7 +892,10 @@
     app.innerHTML = `
       <div class="page-head">
         <h1>${state.editingId ? '記録を編集' : '新規記録の作成'}</h1>
-        <button class="btn btn-ghost" data-nav="list">一覧へ戻る</button>
+        <div style="display:flex; gap:8px;">
+          ${state.editingId ? `<button class="btn btn-ghost btn-danger" id="deleteBtn" style="border-color:var(--border-strong);">この記録を削除</button>` : ''}
+          <button class="btn btn-ghost" data-nav="list">一覧へ戻る</button>
+        </div>
       </div>
       <div class="form-wrap">
         <div class="form-tabs">
@@ -856,7 +935,6 @@
             <input type="date" id="f_duedate" value="${d.dueDate||''}">
           </div>
           <div style="display:flex; gap:8px;">
-            ${state.editingId ? `<button class="btn btn-danger" id="deleteBtn">削除</button>` : ''}
             <button class="btn btn-primary" id="saveBtn">保存する</button>
           </div>
         </div>
@@ -937,12 +1015,13 @@
 
     const delBtn = document.getElementById('deleteBtn');
     if(delBtn) delBtn.addEventListener('click', async ()=>{
-      const { error } = await sbClient.from('records').delete().eq('id', d.id);
+      if(!confirm('この記録を削除しますか？（削除済み一覧から復元できます）')) return;
+      const { error } = await sbClient.from('records').update({ deleted_at: new Date().toISOString() }).eq('id', d.id);
       if(error){ toast('削除に失敗しました'); return; }
       records = records.filter(r=>r.id!==d.id);
       state.view='list';
       render();
-      toast('記録を削除しました');
+      toast('削除済み一覧に移動しました');
     });
   }
 
