@@ -228,14 +228,15 @@
   .section-block .heading-row{ display:flex; gap:10px; margin-bottom:8px; }
   .section-block input.heading{ font-weight:700; border:none; background:transparent; padding:2px 0; border-bottom:1px solid transparent; flex:1; font-size:14px; }
   .section-block input.heading:focus{ outline:none; border-bottom-color:var(--border-strong); }
-  .section-block textarea{ width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; resize:vertical; min-height:70px; background:var(--surface); }
+  .section-heading-label{ font-weight:700; font-size:14px; margin-bottom:8px; color:var(--ink); }
+  .section-block textarea{ width:100%; border:1px solid var(--border-strong); border-radius:var(--radius); padding:10px 12px; resize:vertical; min-height:160px; background:var(--surface); }
   .section-remove{ border:none; background:none; color:var(--ink-faint); font-size:12px; }
   .section-remove:hover{ color:var(--danger); }
   .add-section{ border:1px dashed var(--border-strong); border-radius:var(--radius); background:transparent; color:var(--ink-soft); padding:9px; width:100%; font-size:12.5px; }
   .add-section:hover{ border-color:var(--primary); color:var(--primary); }
   .confirm-block{ padding:0 24px 22px; }
   .confirm-block h3{ font-size:13.5px; margin:0 0 4px; font-weight:700; }
-  .confirm-block .hint{ font-size:11.5px; color:var(--ink-faint); margin:0 0 12px; }
+  .confirm-block .hint{ font-size:13px; color:#3D4A43; line-height:1.7; margin:0 0 12px; }
   .confirm-controls{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
   .confirm-controls select, .confirm-controls input[type=text]{
     border:1px solid var(--border-strong); border-radius:var(--radius); padding:7px 10px; background:var(--surface);
@@ -257,7 +258,7 @@
   .import-panel summary::-webkit-details-marker{ display:none; }
   .import-panel summary::before{ content:'▸'; font-size:11px; color:var(--ink-faint); transition:transform .12s ease; }
   .import-panel[open] summary::before{ transform:rotate(90deg); }
-  .import-panel .hint{ font-size:11.5px; color:var(--ink-faint); margin:8px 0 12px; }
+  .import-panel .hint{ font-size:13px; color:#3D4A43; line-height:1.7; margin:8px 0 12px; }
   .import-body{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
   @media (max-width:760px){ .import-body{ grid-template-columns:1fr; } }
   .import-col label{ display:block; font-size:11.5px; color:var(--ink-faint); margin-bottom:6px; }
@@ -275,6 +276,7 @@
   .detail-section h4{ margin:0 0 8px; font-size:14px; font-weight:700; }
   .detail-section ul{ margin:0; padding-left:18px; }
   .detail-section li{ margin-bottom:4px; color:var(--ink); }
+  .detail-text{ white-space:pre-wrap; color:var(--ink); line-height:1.9; }
 
   .toast{
     position:fixed; bottom:24px; right:24px; background:var(--primary-deep); color:#fff;
@@ -323,8 +325,8 @@
     <p class="brand">議事録</p>
     <p class="brand-sub">Gijiroku Portal for Care</p>
     <button class="nav-item" data-nav="dashboard"><span class="nav-dot"></span>ダッシュボード</button>
-    <button class="nav-item" data-nav="list"><span class="nav-dot"></span>記録一覧</button>
     <div id="newRecordNavSlot"></div>
+    <button class="nav-item" data-nav="list"><span class="nav-dot"></span>記録一覧</button>
     <div class="sidebar-footer">
       <div id="userBadge"></div>
       <div style="margin-top:14px;">
@@ -397,7 +399,7 @@
       id: row.id, type: row.type, committeeId: row.committee_id || '', date: row.date, title: row.title,
       facility: row.facility, role: row.role, location: row.location, recorder: row.recorder,
       sections: row.sections || [], nextAction: row.next_action || '', dueDate: row.due_date || '',
-      confirmations: row.confirmations || [], createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
+      confirmations: row.confirmations || [], attendees: row.attendees || [], createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
     };
   }
   function toDbRow(r){
@@ -414,6 +416,7 @@
       next_action: r.nextAction || null,
       due_date: r.dueDate || null,
       confirmations: r.confirmations || [],
+      attendees: r.attendees || [],
       created_by: currentUser ? currentUser.id : null
     };
   }
@@ -765,13 +768,18 @@
       if(!rec || !canEdit(rec.type)){ toast('この記録を編集する権限がありません'); return; }
       state.draft = JSON.parse(JSON.stringify(rec));
       if(!state.draft.confirmations) state.draft.confirmations = [];
+      if(!state.draft.attendees) state.draft.attendees = [];
+      if(!state.draft.sections.some(s=>s.heading==='次回に向けて')){
+        state.draft.sections.push({heading:'次回に向けて', body:''});
+      }
     } else {
       const defaultType = (presets && presets.type) || editableTypes()[0] || 'staff';
       state.draft = Object.assign({
         id:uid(), type:defaultType, date:todayISO(), title:'', committeeId:'', facility:FACILITIES[0], role:'', recorder:'', location:'',
-        sections:[{heading:'概要', body:''}], nextAction:'', dueDate:'', confirmations:[], createdAt:Date.now()
+        sections:[{heading:'概要', body:''}, {heading:'次回に向けて', body:''}], nextAction:'', dueDate:'', confirmations:[], attendees:[], createdAt:Date.now()
       }, presets||{});
       if(!state.draft.confirmations) state.draft.confirmations = [];
+      if(!state.draft.attendees) state.draft.attendees = [];
       if(state.draft.type==='committee' && state.draft.committeeId){
         const match = COMMITTEES.find(c=>c.id===state.draft.committeeId);
         if(match) state.draft.title = match.name;
@@ -825,8 +833,8 @@
           ${d.type!=='staff' ? `<div class="field"><label>職種<span class="opt">（任意）</span></label><input id="f_role2" type="text" value="${escapeHTML(d.role)}" placeholder="任意"></div>` : `<div class="field"><label>場所<span class="opt">（任意）</span></label><input id="f_location2" type="text" value="${escapeHTML(d.location)}" placeholder="例）面談室"></div>`}
         </div>
         <details class="import-panel">
-          <summary>Word・テキストで作成済みの記録を取り込む</summary>
-          <p class="hint">Word（.docx）またはPDFファイルをアップロードするか、本文をコピー＆ペーストすると、内容を見出しごとに自動で振り分けて下の項目に取り込みます（日付らしき記載があれば実施日も取り込みます）。取り込み後の内容・見出しの区切りは必要に応じて修正してください。スキャン画像のみのPDF（文字が選択できないもの）は読み取れません。</p>
+          <summary>📄 すでにWordやメモで書いた記録がある場合はこちら（任意）</summary>
+          <p class="hint">Word（.docx）またはPDFファイルをアップロードするか、本文をコピー＆ペーストすると、内容を見出しごとに自動で振り分けて下の「概要」欄などに取り込みます（日付らしき記載があれば実施日も取り込みます）。取り込み後の内容・見出しの区切りは必要に応じて修正してください。スキャン画像のみのPDF（文字が選択できないもの）は読み取れません。</p>
           <div class="import-body">
             <div class="import-col">
               <label>Wordファイル（.docx）／ PDFファイル</label>
@@ -839,6 +847,7 @@
             </div>
           </div>
         </details>
+        ${d.type==='committee' ? `<div class="confirm-block" id="attendeesWrap"></div>` : ''}
         <div class="sections" id="sectionsWrap"></div>
         ${d.type==='committee' ? `<div class="confirm-block" id="confirmWrap"></div>` : ''}
         <div class="form-footer">
@@ -855,7 +864,10 @@
     `;
 
     renderSections();
-    if(d.type==='committee') renderConfirmations();
+    if(d.type==='committee'){
+      renderPeoplePicker('attendeesWrap', d.attendees, '出席者', 'この委員会に出席した');
+      renderPeoplePicker('confirmWrap', d.confirmations, '確認署名', 'この委員会記録を確認した');
+    }
 
     document.getElementById('importFile').addEventListener('change', async (e)=>{
       const file = e.target.files[0];
@@ -939,60 +951,54 @@
     const wrap = document.getElementById('sectionsWrap');
     wrap.innerHTML = d.sections.map((s,i)=>`
       <div class="section-block">
-        <div class="heading-row">
-          <input class="heading" data-sec-heading="${i}" value="${escapeHTML(s.heading)}" placeholder="見出し（例：面談の概要）">
-          ${d.sections.length>1 ? `<button class="section-remove" data-sec-remove="${i}">削除</button>` : ''}
-        </div>
-        <textarea data-sec-body="${i}" placeholder="1行につき1項目を入力してください">${escapeHTML(s.body)}</textarea>
+        <div class="section-heading-label">${escapeHTML(s.heading || '（見出しなし）')}</div>
+        <textarea data-sec-body="${i}" placeholder="${s.heading==='次回に向けて' ? '次回の面談・会議で確認したいこと、引き継ぎたいことなどを自由に入力してください' : '自由に入力してください（箇条書きでも、文章でも構いません。改行はそのまま反映されます）'}">${escapeHTML(s.body)}</textarea>
       </div>
-    `).join('') + `<button class="add-section" id="addSection">＋ 項目を追加</button>`;
+    `).join('');
 
-    wrap.querySelectorAll('[data-sec-heading]').forEach(inp=>inp.addEventListener('input', ()=>{ d.sections[inp.dataset.secHeading].heading = inp.value; }));
     wrap.querySelectorAll('[data-sec-body]').forEach(ta=>ta.addEventListener('input', ()=>{ d.sections[ta.dataset.secBody].body = ta.value; }));
-    wrap.querySelectorAll('[data-sec-remove]').forEach(b=>b.addEventListener('click', ()=>{ syncDraftFromForm(); d.sections.splice(Number(b.dataset.secRemove),1); renderSections(); }));
-    document.getElementById('addSection').addEventListener('click', ()=>{ syncDraftFromForm(); d.sections.push({heading:'', body:''}); renderSections(); });
   }
 
-  function renderConfirmations(){
-    const d = state.draft;
-    const wrap = document.getElementById('confirmWrap');
+  function renderPeoplePicker(containerId, list, title, hintVerb){
+    const wrap = document.getElementById(containerId);
     if(!wrap) return;
     const hasRoster = ROSTER_NAMES.length > 0;
-    const availableRoster = ROSTER_NAMES.filter(n => !d.confirmations.includes(n));
+    const availableRoster = ROSTER_NAMES.filter(n => !list.includes(n));
     wrap.innerHTML = `
-      <h3>確認署名</h3>
-      <p class="hint">この委員会記録を確認したスタッフを${hasRoster ? '、名簿から選ぶか名前を直接入力して' : '名前を入力して'}追加してください（複数人可）。</p>
+      <h3>${title}</h3>
+      <p class="hint">${hintVerb}スタッフを${hasRoster ? '、名簿から選ぶか名前を直接入力して' : '名前を入力して'}追加してください（複数人可）。</p>
       <div class="confirm-controls">
         ${hasRoster ? `
-        <select id="confirmRosterSelect">
+        <select class="picker-roster-select">
           <option value="">名簿から選ぶ…</option>
           ${availableRoster.map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join('')}
         </select>
-        <button class="confirm-add-btn" id="confirmRosterAdd">名簿から追加</button>` : ''}
-        <input type="text" id="confirmNameInput" placeholder="${hasRoster ? '名簿にない場合はここに氏名を入力' : '氏名を入力'}">
-        <button class="confirm-add-btn" id="confirmNameAdd">追加</button>
+        <button class="confirm-add-btn picker-roster-add">名簿から追加</button>` : ''}
+        <input type="text" class="picker-name-input" placeholder="${hasRoster ? '名簿にない場合はここに氏名を入力' : '氏名を入力'}">
+        <button class="confirm-add-btn picker-name-add">追加</button>
       </div>
       <div class="confirm-chips">
-        ${d.confirmations.length ? d.confirmations.map((n,i)=>`<span class="confirm-chip">${escapeHTML(n)}<button data-confirm-remove="${i}">×</button></span>`).join('') : `<span class="confirm-empty">まだ誰も確認していません</span>`}
+        ${list.length ? list.map((n,i)=>`<span class="confirm-chip">${escapeHTML(n)}<button data-picker-remove="${i}">×</button></span>`).join('') : `<span class="confirm-empty">まだ誰も追加されていません</span>`}
       </div>
     `;
-    const rosterAddBtn = wrap.querySelector('#confirmRosterAdd');
+    const rerender = ()=>renderPeoplePicker(containerId, list, title, hintVerb);
+    const rosterAddBtn = wrap.querySelector('.picker-roster-add');
     if(rosterAddBtn){
       rosterAddBtn.addEventListener('click', ()=>{
-        const sel = wrap.querySelector('#confirmRosterSelect');
-        if(sel.value && !d.confirmations.includes(sel.value)){ d.confirmations.push(sel.value); renderConfirmations(); }
+        const sel = wrap.querySelector('.picker-roster-select');
+        if(sel.value && !list.includes(sel.value)){ list.push(sel.value); rerender(); }
       });
     }
-    wrap.querySelector('#confirmNameAdd').addEventListener('click', ()=>{
-      const inp = wrap.querySelector('#confirmNameInput');
+    wrap.querySelector('.picker-name-add').addEventListener('click', ()=>{
+      const inp = wrap.querySelector('.picker-name-input');
       const name = inp.value.trim();
-      if(name && !d.confirmations.includes(name)){ d.confirmations.push(name); renderConfirmations(); }
+      if(name && !list.includes(name)){ list.push(name); rerender(); }
     });
-    wrap.querySelector('#confirmNameInput').addEventListener('keyup', (e)=>{
-      if(e.key==='Enter'){ wrap.querySelector('#confirmNameAdd').click(); }
+    wrap.querySelector('.picker-name-input').addEventListener('keyup', (e)=>{
+      if(e.key==='Enter'){ wrap.querySelector('.picker-name-add').click(); }
     });
-    wrap.querySelectorAll('[data-confirm-remove]').forEach(b=>b.addEventListener('click', ()=>{
-      d.confirmations.splice(Number(b.dataset.confirmRemove),1); renderConfirmations();
+    wrap.querySelectorAll('[data-picker-remove]').forEach(b=>b.addEventListener('click', ()=>{
+      list.splice(Number(b.dataset.pickerRemove),1); rerender();
     }));
   }
 
@@ -1027,33 +1033,23 @@
     const m = text.match(/(\d{4})[年\/\-](\d{1,2})[月\/\-](\d{1,2})日?/);
     if(m){ foundDate = `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`; }
 
-    // 空行区切りでブロック化 → 各ブロックの先頭行を見出し、残りを箇条書きとして扱う
-    const blocks = text.replace(/\r/g,'').split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+    // 行頭の箇条書き記号だけ取り除き、改行はそのまま保った1つの文章として返す
     const bulletStrip = /^[・\-‐−●○◯\*\u2022]\s*|^\d+[\.\)、]\s*/;
-    const sections = blocks.map(block=>{
-      const lines = block.split('\n').map(l=>l.trim()).filter(Boolean);
-      if(lines.length === 0) return null;
-      const looksLikeHeading = lines[0].length <= 24 && !bulletStrip.test(lines[0]) && lines.length > 1;
-      const heading = looksLikeHeading ? lines[0].replace(/[：:]\s*$/,'') : '取り込んだ内容';
-      const bodyLines = looksLikeHeading ? lines.slice(1) : lines;
-      const body = bodyLines.map(l=>l.replace(bulletStrip,'')).join('\n');
-      return { heading, body };
-    }).filter(Boolean);
+    const body = text.replace(/\r/g,'').split('\n').map(l=>l.replace(bulletStrip,'')).join('\n').trim();
 
-    return { date: foundDate, sections: sections.length ? sections : [{heading:'取り込んだ内容', body:text.trim()}] };
+    return { date: foundDate, body };
   }
 
   function applyImportedText(text){
     const d = state.draft;
     const parsed = parseImportedText(text);
     if(parsed.date) d.date = parsed.date;
-    const isDefaultEmpty = d.sections.length===1 && !d.sections[0].body.trim();
-    if(isDefaultEmpty) d.sections = parsed.sections;
-    else d.sections = d.sections.concat(parsed.sections);
+    const overview = d.sections.find(s=>s.heading==='概要') || d.sections[0];
+    overview.body = overview.body && overview.body.trim() ? overview.body + '\n\n' + parsed.body : parsed.body;
     renderSections();
     const dateField = document.getElementById('f_date');
     if(dateField && parsed.date) dateField.value = parsed.date;
-    toast('内容を取り込みました。見出しの区切りや日付は自動判定のため、内容をご確認ください');
+    toast('「概要」欄に内容を取り込みました。日付は自動判定のため、内容をご確認ください');
   }
 
   function syncDraftFromForm(){
@@ -1079,8 +1075,16 @@
     const sections = (r.sections||[]).map(s=>`
       <div class="detail-section">
         <h4>${escapeHTML(s.heading||'（見出しなし）')}</h4>
-        <ul>${(s.body||'').split('\n').filter(l=>l.trim()).map(l=>`<li>${escapeHTML(l)}</li>`).join('') || '<li style="color:var(--ink-faint)">記載なし</li>'}</ul>
+        <div class="detail-text">${s.body && s.body.trim() ? escapeHTML(s.body) : '<span style="color:var(--ink-faint)">記載なし</span>'}</div>
       </div>`).join('');
+
+    const attendeesSection = (r.type==='committee') ? `
+      <div class="detail-section">
+        <h4>出席者</h4>
+        ${ (r.attendees && r.attendees.length)
+            ? `<div class="confirm-chips">${r.attendees.map(n=>`<span class="confirm-chip" style="background:var(--bg); border:1px solid var(--border-strong);">${escapeHTML(n)}</span>`).join('')}</div>`
+            : `<p style="margin:0; color:var(--ink-faint); font-size:12.5px;">出席者が登録されていません。</p>` }
+      </div>` : '';
 
     const confirmSection = (r.type==='committee') ? `
       <div class="detail-section">
@@ -1107,6 +1111,7 @@
         <div class="detail-body">
           ${sections}
           ${r.nextAction ? `<div class="detail-section"><h4>次のアクション</h4><p style="margin:0;">${escapeHTML(r.nextAction)}${r.dueDate?'（期日: '+fmt(r.dueDate)+'）':''}</p></div>` : ''}
+          ${attendeesSection}
           ${confirmSection}
         </div>
       </div>
